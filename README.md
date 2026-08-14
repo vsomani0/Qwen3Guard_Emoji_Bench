@@ -12,6 +12,9 @@ LLM Detection** (Wei, Liu & Erichson, ICML 2025 — [arXiv](https://arxiv.org/ab
 
 **The emoji results replicate to Qwen3Guard as a monitor model. Additionally, monitor vulnerability through emojis seems to be primarily semantic for this model.**
 
+All three of `#`, `😊`, and `🖕` are single tokens in Qwen3's vocabulary and were inserted at
+identical positions, so all three produce identical segmentation and identical token inflation
+(2.44x). Only the character differs:
 
 | delimiter | token inflation | P(unsafe) on harmful | Δ vs clean | 95% CI |
 |---|---|---|---|---|
@@ -32,8 +35,8 @@ On Qwen3Guard-Gen-0.6B, semantics dominate.
 
 ## The false-positive control finds new results
 
-We added a benign
-arm into the paper.
+The paper reports unsafe-prediction ratio on harmful content only, so we add a benign arm to
+measure the false-positive side alongside it.
 
 | condition | harmful P(unsafe) | benign P(unsafe) | benign FPR (strict) |
 |---|---|---|---|
