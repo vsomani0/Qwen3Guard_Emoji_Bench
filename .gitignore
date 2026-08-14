@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Cloned upstream data. Contains harmful strings -- never commit.
+work/
+
+# Paper PDF: 4.3MB, freely available at arxiv.org/abs/2411.01077
+Emoji_Attack_Paper.pdf
+
+# Raw model outputs contain the harmful strings verbatim -- never commit.
+out/*.jsonl
+
+# Derived, non-sensitive artifacts ARE committed: out/*.csv, out/*.png
+!out/*.csv
+!out/*.png

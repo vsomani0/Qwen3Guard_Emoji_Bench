@@ -1,0 +1,17 @@
+[project]
+name = "emoji-bench-replication"
+version = "0.1.0"
+description = "Replication and extension of Emoji Attack (Wei, Liu & Erichson, ICML 2025) against Qwen3Guard-Gen-4B"
+requires-python = "==3.11.*"
+dependencies = [
+    "torch>=2.6",
+    "transformers>=4.51",
+    "accelerate>=1.0",
+    "pandas>=2.0",
+    "scipy>=1.13",
+    "matplotlib>=3.8",
+    "statsmodels>=0.14",
+]
+
+[tool.uv]
+package = false
