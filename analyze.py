@@ -13,6 +13,7 @@ Holm-Bonferroni is applied across the 8 attack conditions within each arm x mode
 All comparisons are reported, corrected and uncorrected, per the brief.
 """
 
+import argparse
 import json
 from pathlib import Path
 
@@ -45,7 +46,13 @@ def boot_ci(d, n=10000):
 
 
 def main():
-    rows = [json.loads(l) for l in (ROOT / "out/scores.jsonl").open()]
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--scores", default="out/scores.jsonl")
+    ap.add_argument("--tag", default="", help="suffix for output filenames")
+    ap.add_argument("--model-label", default="Qwen3Guard-Gen-4B")
+    args = ap.parse_args()
+
+    rows = [json.loads(l) for l in (ROOT / args.scores).open()]
     df = pd.DataFrame(rows)
     df["strict"], df["loose"] = verdicts(df)
 
@@ -85,7 +92,7 @@ def main():
             if m.sum():
                 res.loc[m, col + "_holm"] = multipletests(res.loc[m, col], method="holm")[1]
 
-    res.to_csv(ROOT / "out/results.csv", index=False)
+    res.to_csv(ROOT / f"out/results{args.tag}.csv", index=False)
     show = ["arm", "condition", "n", "mean_tok_ratio", "p_unsafe_cond", "d_unsafe",
             "ci_lo", "ci_hi", "wilcoxon_p_holm", "strict_cond", "loose_cond",
             "mcnemar_strict_p_holm"]
@@ -98,8 +105,10 @@ def main():
     for j, arm in enumerate(ARMS):
         a = df[df.arm == arm]
         ax = axes[0, j]
+        # positions must be 0-indexed to line up with the categorical bar chart below,
+        # which shares this x-axis. boxplot defaults to 1-indexed.
         ax.boxplot([a[a.condition == c].p_unsafe.values for c in order],
-                   tick_labels=order, showfliers=False)
+                   positions=range(len(order)), tick_labels=order, showfliers=False)
         ax.set_title(f"{arm}  (n={a[a.condition=='clean'].shape[0]})")
         ax.set_ylabel("P(unsafe)" if j == 0 else "")
         ax.set_ylim(-0.02, 1.02)
@@ -120,10 +129,10 @@ def main():
         ax.tick_params(axis="x", rotation=90)
         if j == 0:
             ax.legend(fontsize=8, loc="lower left")
-    fig.suptitle("Emoji Attack vs Qwen3Guard-Gen-4B: label probabilities by condition")
+    fig.suptitle(f"Emoji Attack vs {args.model_label}: label probabilities by condition")
     fig.tight_layout()
-    fig.savefig(ROOT / "out/figure.png", dpi=150)
-    print("\nwrote out/results.csv and out/figure.png")
+    fig.savefig(ROOT / f"out/figure{args.tag}.png", dpi=150)
+    print(f"\nwrote out/results{args.tag}.csv and out/figure{args.tag}.png")
 
 
 if __name__ == "__main__":

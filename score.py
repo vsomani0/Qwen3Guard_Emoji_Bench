@@ -80,6 +80,14 @@ def main():
     ap.add_argument("--arms", default="harmful,benign_sent,benign_full")
     ap.add_argument("--limit", type=int, default=0, help="items per arm, 0 = all")
     ap.add_argument("--out", default="out/scores.jsonl")
+    # Default 1, deliberately. Measured on Qwen3Guard-Gen-0.6B, 40 harmful items:
+    #   bs=1 vs bs=1 rerun       max |dP(unsafe)| = 0.0
+    #   bs=8 vs bs=1             max = 2.8e-2, mean = 2.1e-3, 15% of items > 1e-3
+    # Left-padded batching changes bf16 matmul reduction order. The noise is tiny next to
+    # the effects we measure (~0.3) and is not directional, but bs=1 is bit-exact
+    # reproducible and different conditions have different lengths -- so under batching the
+    # noise would correlate with condition, which is exactly the axis being measured.
+    ap.add_argument("--batch", type=int, default=1)
     args = ap.parse_args()
 
     conds = CONDITIONS if args.conditions == "all" else args.conditions.split(",")
@@ -112,28 +120,46 @@ def main():
     todo = [(r, c) for c in conds for r in items if (r["id"], r["arm"], c) not in done]
     print(f"{len(todo)} forward passes ({len(items)} items x {len(conds)} conditions, {len(done)} cached)")
 
-    n_over = 0
+    # Tokenise everything up front so batches can be length-sorted (less padding waste).
+    prepared, n_over = [], 0
+    for row, cond in todo:
+        text = apply_condition(row["text"], cond, tok)
+        ids = check_prompt(tok, build_prompt(tok, text), text)
+        if len(ids) > MAX_PROMPT_TOKENS:
+            # Never expected to fire: the template is ~380 tokens and the longest
+            # emoji-transformed item lands near 800. Logged rather than silently truncated.
+            n_over += 1
+        prepared.append((row, cond, text, ids))
+    prepared.sort(key=lambda x: len(x[3]))
+
+    pad_id = tok.pad_token_id if tok.pad_token_id is not None else tok.eos_token_id
+    done_n = 0
     with out_path.open("a") as fh, torch.inference_mode():
-        for k, (row, cond) in enumerate(todo):
-            text = apply_condition(row["text"], cond, tok)
-            prompt = build_prompt(tok, text)
-            ids = check_prompt(tok, prompt, text)
-            if len(ids) > MAX_PROMPT_TOKENS:
-                # Never expected to fire: the template is ~380 tokens and the longest
-                # emoji-transformed item lands near 800. Logged rather than silently truncated.
-                n_over += 1
-            inp = torch.tensor([ids], device="mps")
-            logits = model(inp).logits[0, -1]
-            p = torch.softmax(logits[sel].float(), dim=-1).tolist()
-            fh.write(json.dumps({
-                "id": row["id"], "arm": row["arm"], "condition": cond,
-                "text": text, "n_tok_text": len(tok.encode(text, add_special_tokens=False)),
-                "n_tok_prompt": len(ids),
-                "p_safe": p[0], "p_unsafe": p[1], "p_controversial": p[2],
-            }, ensure_ascii=False) + "\n")
-            if k % 50 == 0:
+        for s in range(0, len(prepared), args.batch):
+            chunk = prepared[s : s + args.batch]
+            m = max(len(x[3]) for x in chunk)
+            inp = torch.full((len(chunk), m), pad_id, dtype=torch.long)
+            attn = torch.zeros((len(chunk), m), dtype=torch.long)
+            for i, (_, _, _, ids) in enumerate(chunk):
+                inp[i, m - len(ids):] = torch.tensor(ids)
+                attn[i, m - len(ids):] = 1
+            # LEFT padding, so logits[:, -1] is the real final token for every row.
+            # position_ids are derived from the mask rather than left at arange(), so the
+            # padded rows get the same RoPE phases they would get unbatched.
+            pos = (attn.cumsum(-1) - 1).clamp(min=0)
+            out = model(inp.to("mps"), attention_mask=attn.to("mps"), position_ids=pos.to("mps"))
+            probs = torch.softmax(out.logits[:, -1][:, sel].float(), dim=-1).tolist()
+            for (row, cond, text, ids), p in zip(chunk, probs):
+                fh.write(json.dumps({
+                    "id": row["id"], "arm": row["arm"], "condition": cond,
+                    "text": text, "n_tok_text": len(tok.encode(text, add_special_tokens=False)),
+                    "n_tok_prompt": len(ids),
+                    "p_safe": p[0], "p_unsafe": p[1], "p_controversial": p[2],
+                }, ensure_ascii=False) + "\n")
+            done_n += len(chunk)
+            if s % (args.batch * 10) == 0:
                 fh.flush()
-                print(f"  {k}/{len(todo)}", flush=True)
+                print(f"  {done_n}/{len(prepared)}", flush=True)
     print(f"done. prompts over {MAX_PROMPT_TOKENS} tokens: {n_over}")
 
 
