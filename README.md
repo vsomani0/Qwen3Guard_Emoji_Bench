@@ -1,10 +1,10 @@
-# Does the Emoji Attack survive a 2025 guardrail?
+# Does the Emoji Attack survive a 2025 guardrail monitor?
 
 A scoped replication and extension of **Emoji Attack: Enhancing Jailbreak Attacks Against Judge
 LLM Detection** (Wei, Liu & Erichson, ICML 2025 — [arXiv](https://arxiv.org/abs/2411.01077) ·
 [code](https://github.com/zhipeng-wei/EmojiAttack)), run against **Qwen3Guard-Gen** (Alibaba, Sept 2025).
 
-**LLM Disclosure**: This README was initially written by Claude Opus 5. README was reviewed and edited by Vivek.
+**LLM Usage**: This README was initially written by Claude Opus 5. README was reviewed and edited by Vivek.
 
 **Status:** results below are for **Qwen3Guard-Gen-0.6B**.
 
