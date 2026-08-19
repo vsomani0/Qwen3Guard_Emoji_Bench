@@ -1,4 +1,4 @@
-# Does the Emoji Attack work with a 2025 guardrail?
+# Does the Emoji Attack work on monitors with a 2025 Guardrail?
 
 A scoped replication and extension of **Emoji Attack: Enhancing Jailbreak Attacks Against Judge
 LLM Detection** (Wei, Liu & Erichson, ICML 2025 — [arXiv](https://arxiv.org/abs/2411.01077) ·
